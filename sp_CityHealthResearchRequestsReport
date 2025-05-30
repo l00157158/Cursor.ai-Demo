@@ -1,0 +1,292 @@
+CREATE PROCEDURE [dbo].[stp_CityHealthResearchRequestsReport]
+@FromDate DATETIME,
+@ToDate DATETIME,
+@StatusId int,
+@BranchId int,
+@Count INT OUTPUT
+AS
+BEGIN
+DECLARE @TempTable TABLE
+(
+    ProjectId INT,
+    Recieved DATETIME,
+    Concluded DATETIME,
+    Comment VARCHAR(8000)
+)
+
+IF @StatusId <> 0 AND @BranchId <> 0
+BEGIN
+
+    INSERT INTO @TempTable (ProjectId, Recieved, Concluded, Comment)
+    SELECT DISTINCT
+        p.ProjectId,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 1
+         ORDER BY wf.WorkflowHistoryId DESC) AS Recieved,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Concluded,
+        (SELECT TOP 1 wf.Comment
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Comment
+    FROM
+        Project p
+        JOIN WorkflowHistory w ON p.ProjectId = w.ProjectId
+        JOIN ProjectBranch pb ON pb.ProjectId = p.ProjectId
+    WHERE
+        p.ProjectId = w.ProjectId
+        AND p.StatusId = @StatusId
+        AND pb.BranchId = @BranchId
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+
+    SELECT DISTINCT
+        p.ProjectId,
+        p.Title,
+        STUFF (
+               (SELECT ', ' + f.Name
+                FROM dbo.Facility f
+                LEFT JOIN dbo.ProjectFacility pf ON f.FacilityId = pf.FacilityId
+                WHERE pf.ProjectId = p.ProjectId
+                FOR XML PATH (''))
+                , 1, 1, '') AS Facilities,
+        tt.Recieved,
+        tt.Concluded,
+        b.BranchName,
+        st.Description AS StatusText,
+        tt.Comment,
+        tt.Concluded - tt.Recieved AS Turnaround
+    FROM
+        dbo.Project p
+        INNER JOIN @TempTable tt ON p.ProjectId = tt.ProjectId
+        LEFT JOIN dbo.ProjectBranch pb ON p.ProjectId = pb.ProjectId
+        LEFT JOIN dbo.Branch b ON pb.BranchId = b.BranchId
+        LEFT JOIN dbo.Status st ON p.StatusId = st.StatusId
+    WHERE
+        p.StatusId = @StatusId
+        AND b.BranchId = @BranchId
+    SET @Count = @@ROWCOUNT
+END
+
+IF @StatusId <> 0 AND @BranchId = 0
+BEGIN
+
+    INSERT INTO @TempTable (ProjectId, Recieved, Concluded, Comment)
+    SELECT DISTINCT
+        p.ProjectId,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 1
+         ORDER BY wf.WorkflowHistoryId DESC) AS Recieved,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Concluded,
+        (SELECT TOP 1 wf.Comment
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Comment
+    FROM
+        Project p
+        JOIN WorkflowHistory w ON p.ProjectId = w.ProjectId
+        JOIN ProjectBranch pb ON pb.ProjectId = p.ProjectId
+    WHERE
+        p.ProjectId = w.ProjectId
+        AND p.StatusId = @StatusId
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+
+    SELECT DISTINCT
+        p.ProjectId,
+        p.Title,
+        STUFF (
+               (SELECT ', ' + f.Name
+                FROM dbo.Facility f
+                LEFT JOIN dbo.ProjectFacility pf ON f.FacilityId = pf.FacilityId
+                WHERE pf.ProjectId = p.ProjectId
+                FOR XML PATH (''))
+                , 1, 1, '') AS Facilities,
+        tt.Recieved,
+        tt.Concluded,
+        b.BranchName,
+        st.Description AS StatusText,
+        tt.Comment,
+        tt.Concluded - tt.Recieved AS Turnaround
+    FROM
+        dbo.Project p
+        INNER JOIN @TempTable tt ON p.ProjectId = tt.ProjectId
+        LEFT JOIN dbo.ProjectBranch pb ON p.ProjectId = pb.ProjectId
+        LEFT JOIN dbo.Branch b ON pb.BranchId = b.BranchId
+        LEFT JOIN dbo.Status st ON p.StatusId = st.StatusId
+    WHERE
+        p.StatusId = @StatusId
+    SET @Count = @@ROWCOUNT
+END
+
+IF @StatusId = 0 AND @BranchId <> 0
+BEGIN
+
+    INSERT INTO @TempTable (ProjectId, Recieved, Concluded, Comment)
+    SELECT DISTINCT
+        p.ProjectId,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 1
+         ORDER BY wf.WorkflowHistoryId DESC) AS Recieved,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Concluded,
+        (SELECT TOP 1 wf.Comment
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Comment
+    FROM
+        Project p
+        JOIN WorkflowHistory w ON p.ProjectId = w.ProjectId
+        JOIN ProjectBranch pb ON pb.ProjectId = p.ProjectId
+    WHERE
+        p.ProjectId = w.ProjectId
+        AND p.StatusId = 5
+        AND pb.BranchId = @BranchId
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+        OR p.ProjectId = w.ProjectId
+        AND p.StatusId = 6
+        AND pb.BranchId = @BranchId
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+        OR p.ProjectId = w.ProjectId
+        AND p.StatusId = 7
+        AND pb.BranchId = @BranchId
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+
+    SELECT DISTINCT
+        p.ProjectId,
+        p.Title,
+        STUFF (
+               (SELECT ', ' + f.Name
+                FROM dbo.Facility f
+                LEFT JOIN dbo.ProjectFacility pf ON f.FacilityId = pf.FacilityId
+                WHERE pf.ProjectId = p.ProjectId
+                FOR XML PATH (''))
+                , 1, 1, '') AS Facilities,
+        tt.Recieved,
+        tt.Concluded,
+        b.BranchName,
+        st.Description AS StatusText,
+        tt.Comment,
+        tt.Concluded - tt.Recieved AS Turnaround
+    FROM
+        dbo.Project p
+        INNER JOIN @TempTable tt ON p.ProjectId = tt.ProjectId
+        LEFT JOIN dbo.ProjectBranch pb ON p.ProjectId = pb.ProjectId
+        LEFT JOIN dbo.Branch b ON pb.BranchId = b.BranchId
+        LEFT JOIN dbo.Status st ON p.StatusId = st.StatusId
+    WHERE
+        p.StatusId = 5
+        AND pb.BranchId = @BranchId
+        OR p.StatusId = 6
+        AND pb.BranchId = @BranchId
+        OR p.StatusId = 7
+        AND pb.BranchId = @BranchId
+    SET @Count = @@ROWCOUNT
+END
+
+IF @StatusId = 0 AND @BranchId = 0
+BEGIN
+
+    INSERT INTO @TempTable (ProjectId, Recieved, Concluded, Comment)
+    SELECT DISTINCT
+        p.ProjectId,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 1
+         ORDER BY wf.WorkflowHistoryId DESC) AS Recieved,
+        (SELECT TOP 1 wf.ActionedOn
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Concluded,
+        (SELECT TOP 1 wf.Comment
+         FROM WorkflowHistory wf
+         WHERE wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 4
+         OR wf.ProjectId = p.ProjectId
+         AND wf.WorkflowStep = 5
+         ORDER BY wf.WorkflowHistoryId DESC) AS Comment
+    FROM
+        Project p
+        JOIN WorkflowHistory w ON p.ProjectId = w.ProjectId
+        JOIN ProjectBranch pb ON pb.ProjectId = p.ProjectId
+    WHERE
+        p.ProjectId = w.ProjectId
+        AND p.StatusId = 5
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+        OR p.ProjectId = w.ProjectId
+        AND p.StatusId = 6
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+        OR p.ProjectId = w.ProjectId
+        AND p.StatusId = 7
+        AND w.WorkflowStep = 1
+        AND (w.ActionedOn BETWEEN @FromDate AND @ToDate)
+
+    SELECT DISTINCT
+        p.ProjectId,
+        p.Title,
+        STUFF (
+               (SELECT ', ' + f.Name
+                FROM dbo.Facility f
+                LEFT JOIN dbo.ProjectFacility pf ON f.FacilityId = pf.FacilityId
+                WHERE pf.ProjectId = p.ProjectId
+                FOR XML PATH (''))
+                , 1, 1, '') AS Facilities,
+        tt.Recieved,
+        tt.Concluded,
+        b.BranchName,
+        st.Description AS StatusText,
+        tt.Comment,
+        tt.Concluded - tt.Recieved AS Turnaround
+    FROM
+        dbo.Project p
+        INNER JOIN @TempTable tt ON p.ProjectId = tt.ProjectId
+        LEFT JOIN dbo.ProjectBranch pb ON p.ProjectId = pb.ProjectId
+        LEFT JOIN dbo.Branch b ON pb.BranchId = b.BranchId
+        LEFT JOIN dbo.Status st ON p.StatusId = st.StatusId
+    WHERE
+        p.StatusId = 5
+        OR p.StatusId = 6
+        OR p.StatusId = 7
+    SET @Count = @@ROWCOUNT
+END
+END
